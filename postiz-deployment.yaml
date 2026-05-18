@@ -7,14 +7,14 @@ metadata:
 type: Opaque
 stringData:
   DATABASE_URL: postgres://postiz:postizpassword@localhost:5432/postiz
-  APP_URL: http://postiz.local
+  APP_URL: http://postiz.local:30000
   JWT_SECRET: "change-this-jwt-secret"
   ENCRYPTION_KEY: "change-this-encryption-key"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-pvc
+  name: postiz-postgres-pvc
   labels:
     app: postiz
 spec:
@@ -40,16 +40,6 @@ spec:
       labels:
         app: postiz
     spec:
-      initContainers:
-        - name: migrate
-          image: postiz/postiz:latest
-          command: ["npx", "prisma", "migrate", "deploy"]
-          env:
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: postiz-env
-                  key: DATABASE_URL
       containers:
         - name: postgres
           image: postgres:16
@@ -61,10 +51,18 @@ spec:
             - name: POSTGRES_PASSWORD
               value: postizpassword
           volumeMounts:
-            - name: postgres-data
+            - name: postiz-postgres-data
               mountPath: /var/lib/postgresql/data
         - name: postiz
-          image: postiz/postiz:latest
+          image: ghcr.io/gitroomhq/postiz-app:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until node -e "require('net').createConnection({host:'localhost',port:5432}).on('connect',function(){process.exit(0)}).on('error',function(){process.exit(1)})" 2>/dev/null; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+              exec sh -c "nginx && pnpm run pm2"
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -87,11 +85,11 @@ spec:
                   name: postiz-env
                   key: ENCRYPTION_KEY
           ports:
-            - containerPort: 3000
+            - containerPort: 5000
       volumes:
-        - name: postgres-data
+        - name: postiz-postgres-data
           persistentVolumeClaim:
-            claimName: postgres-pvc
+            claimName: postiz-postgres-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -105,4 +103,5 @@ spec:
     app: postiz
   ports:
     - port: 80
-      targetPort: 3000
+      targetPort: 5000
+      nodePort: 30000
