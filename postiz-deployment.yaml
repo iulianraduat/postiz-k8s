@@ -100,6 +100,7 @@ metadata:
   labels:
     app: postiz
 spec:
+  type: NodePort
   selector:
     app: postiz
   ports:
