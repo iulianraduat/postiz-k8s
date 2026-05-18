@@ -10,6 +10,7 @@ stringData:
   APP_URL: http://postiz.local:30000
   JWT_SECRET: "change-this-jwt-secret"
   ENCRYPTION_KEY: "change-this-encryption-key"
+  DISABLE_REGISTRATION: "true"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -84,6 +85,11 @@ spec:
                 secretKeyRef:
                   name: postiz-env
                   key: ENCRYPTION_KEY
+            - name: DISABLE_REGISTRATION
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: DISABLE_REGISTRATION
           ports:
             - containerPort: 5000
       volumes:
