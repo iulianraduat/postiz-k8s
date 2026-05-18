@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postiz-env
+  labels:
+    app: postiz
+type: Opaque
+stringData:
+  DATABASE_URL: postgres://postiz:postizpassword@localhost:5432/postiz
+  APP_URL: http://postiz.local
+  JWT_SECRET: "change-this-jwt-secret"
+  ENCRYPTION_KEY: "change-this-encryption-key"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: postiz
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postiz
+  labels:
+    app: postiz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postiz
+  template:
+    metadata:
+      labels:
+        app: postiz
+    spec:
+      initContainers:
+        - name: migrate
+          image: postiz/postiz:latest
+          command: ["npx", "prisma", "migrate", "deploy"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: DATABASE_URL
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - name: POSTGRES_DB
+              value: postiz
+            - name: POSTGRES_USER
+              value: postiz
+            - name: POSTGRES_PASSWORD
+              value: postizpassword
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+        - name: postiz
+          image: postiz/postiz:latest
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: DATABASE_URL
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: APP_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: JWT_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: postiz-env
+                  key: ENCRYPTION_KEY
+          ports:
+            - containerPort: 3000
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postiz
+  labels:
+    app: postiz
+spec:
+  selector:
+    app: postiz
+  ports:
+    - port: 80
+      targetPort: 3000
